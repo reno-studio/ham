@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Google Sheets A → B 更新工具</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    :root { font-family: system-ui,-apple-system,"Segoe UI",sans-serif; color:#17212f; background:#f4f6fa; }
+    body { margin:0; padding:40px 16px; }
+    main { max-width:680px; margin:auto; background:white; border-radius:16px; padding:28px; box-shadow:0 8px 32px #15203612; }
+    h1 { font-size:1.45rem; margin:0 0 10px; }
+    p { line-height:1.6; color:#536070; }
+    .panel { padding:16px; border:1px solid #dce3ec; border-radius:12px; margin-top:16px; }
+    label { display:block; font-weight:600; margin:12px 0 6px; }
+    input { width:100%; box-sizing:border-box; padding:10px; border:1px solid #aebdce; border-radius:8px; font:inherit; }
+    button { border:0; border-radius:9px; background:#1765d1; color:white; font:inherit; padding:11px 18px; cursor:pointer; margin:12px 8px 4px 0; }
+    button.secondary { background:#e9edf5; color:#17212f; }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    #status { font-weight:600; }
+    pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#111827; color:#e5edf9; border-radius:10px; padding:16px; min-height:60px; line-height:1.6; }
+    small { color:#637084; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Google Sheets 更新工具</h1>
+  <p>使用 Google 帳號授權後，搜尋 Sheet1 的 A 欄所有等於 <code>abc</code> 的儲存格，將同一列 B 欄改為數字 <code>123</code>。</p>
+  <div class="panel">
+    <p>點擊下方按鈕，直接使用 Google 帳號登入並授權操作試算表，不需要複製任何 Token。</p>
+    <div><button id="login" disabled>使用 Google 登入並授權</button><button class="secondary" id="logout" disabled>解除授權／清除 Token</button></div>
+    <div id="status" role="status">正在載入 Google 登入元件…</div>
+  </div>
+  <div class="panel">
+    <p>試算表：<a href="https://docs.google.com/spreadsheets/d/1rvqYvx1F8Pm7bAPRWF3hc3W9zqPtJpxPKtlYiRb57vE/edit" target="_blank" rel="noopener noreferrer">開啟 Google Sheets</a></p>
+    <button id="execute" disabled>搜尋 abc 並寫入 123</button>
+    <pre id="log" aria-live="polite">尚未執行。</pre>
+  </div>
+</main>
+<script>
+  'use strict';
+  // 開發者只需要在部署前設定一次，使用者不需要輸入任何 ID 或 Token。
+  const CLIENT_ID = '1026533396364-4h9ras31dv5j681p9a11dmsqn7hfbebc.apps.googleusercontent.com';
+  const SPREADSHEET_ID = '1rvqYvx1F8Pm7bAPRWF3hc3W9zqPtJpxPKtlYiRb57vE';
+  const SHEET_NAME = 'Sheet1';
+  const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+  const API_BASE = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`;
+  const $ = id => document.getElementById(id);
+  let accessToken = null;
+  let tokenClient = null;
+  let busy = false;
+
+  function appendLog(message) { $('log').textContent += `${message}\n`; }
+  function setButtons() {
+    $('login').disabled = busy || !window.google?.accounts?.oauth2;
+    $('logout').disabled = busy || !accessToken;
+    $('execute').disabled = busy || !accessToken;
+    $('status').textContent = accessToken ? '已取得 Google Access Token（只存於本頁記憶體）' : '尚未授權';
+  }
+  function escapeA1Name(name) { return `'${name.replaceAll("'", "''")}'`; }
+
+  function waitForGIS() {
+    if (!window.google?.accounts?.oauth2) {
+      setTimeout(waitForGIS, 100);
+      return;
+    }
+    setButtons();
+  }
+  waitForGIS();
+
+  $('login').addEventListener('click', () => {
+    if (!/^\d+-.+\.apps\.googleusercontent\.com$/.test(CLIENT_ID)) {
+      alert('網站尚未設定 OAuth Web Client ID，請由開發者修改 HTML 的 CLIENT_ID 常數。');
+      return;
+    }
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPE,
+      callback: response => {
+        if (response.error || !response.access_token) {
+          $('log').textContent = `授權失敗：${response.error || '未取得 Access Token'}`;
+          return;
+        }
+        accessToken = response.access_token;
+        $('log').textContent = '授權成功，現在可以執行更新。\n';
+        setButtons();
+      },
+      error_callback: err => {
+        $('log').textContent = `授權視窗錯誤：${err.type || '未知錯誤'}`;
+      }
+    });
+    tokenClient.requestAccessToken({ prompt: 'select_account' });
+  });
+
+  $('logout').addEventListener('click', () => {
+    if (accessToken) google.accounts.oauth2.revoke(accessToken, () => {});
+    accessToken = null;
+    tokenClient = null;
+    $('log').textContent = '已清除本頁 Token，並要求 Google 撤銷該 Token。\n';
+    setButtons();
+  });
+
+  async function googleApi(url, options = {}) {
+    const resp = await fetch(url, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...options.headers
+      }
+    });
+    const raw = await resp.text();
+    let data;
+    try { data = raw ? JSON.parse(raw) : {}; }
+    catch { throw new Error(`API 回傳非 JSON (${resp.status})：${raw.slice(0, 200)}`); }
+    if (!resp.ok) {
+      if (resp.status === 401) {
+        accessToken = null;
+        setButtons();
+      }
+      throw new Error(`HTTP ${resp.status}：${data.error?.message || raw.slice(0, 200)}`);
+    }
+    return data;
+  }
+
+  $('execute').addEventListener('click', async () => {
+    if (!accessToken || busy) return;
+    busy = true;
+    setButtons();
+    $('log').textContent = '讀取 A 欄中…\n';
+    try {
+      const sheet = escapeA1Name(SHEET_NAME);
+      const range = encodeURIComponent(`${sheet}!A:A`);
+      const result = await googleApi(`${API_BASE}/values/${range}`);
+      const updates = [];
+      for (const [index, row] of (result.values || []).entries()) {
+        if (row[0] === 'abc') {
+          const rowNumber = index + 1;
+          appendLog(`找到 A${rowNumber} → 將 B${rowNumber} 寫入 123`);
+          updates.push({ range: `${sheet}!B${rowNumber}`, values: [[123]] });
+        }
+      }
+      if (updates.length === 0) {
+        appendLog('沒有找到完全等於 abc 的資料，沒有修改。');
+        return;
+      }
+      const response = await googleApi(`${API_BASE}/values:batchUpdate`, {
+        method: 'POST',
+        body: JSON.stringify({ valueInputOption: 'RAW', data: updates })
+      });
+      appendLog(`完成：更新了 ${response.totalUpdatedCells ?? updates.length} 個儲存格。`);
+    } catch (e) {
+      appendLog(`錯誤：${e.message}`);
+    } finally {
+      busy = false;
+      setButtons();
+    }
+  });
+</script>
+</body>
+</html>
