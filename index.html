@@ -2,160 +2,375 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Google Sheets A → B 更新工具</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>財產查詢與綁定</title>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js" defer></script>
   <style>
-    :root { font-family: system-ui,-apple-system,"Segoe UI",sans-serif; color:#17212f; background:#f4f6fa; }
-    body { margin:0; padding:40px 16px; }
-    main { max-width:680px; margin:auto; background:white; border-radius:16px; padding:28px; box-shadow:0 8px 32px #15203612; }
-    h1 { font-size:1.45rem; margin:0 0 10px; }
-    p { line-height:1.6; color:#536070; }
-    .panel { padding:16px; border:1px solid #dce3ec; border-radius:12px; margin-top:16px; }
-    label { display:block; font-weight:600; margin:12px 0 6px; }
-    input { width:100%; box-sizing:border-box; padding:10px; border:1px solid #aebdce; border-radius:8px; font:inherit; }
-    button { border:0; border-radius:9px; background:#1765d1; color:white; font:inherit; padding:11px 18px; cursor:pointer; margin:12px 8px 4px 0; }
-    button.secondary { background:#e9edf5; color:#17212f; }
+    :root { font-family: system-ui,-apple-system,"Segoe UI",sans-serif; color:#1d2939; background:#f3f6fa; color-scheme:light; }
+    * { box-sizing:border-box; }
+    body { margin:0; padding:32px 16px; }
+    main { max-width:860px; margin:auto; padding:28px; background:white; border:1px solid #e1e7ef; border-radius:18px; box-shadow:0 12px 40px #17304d0a; }
+    h1 { font-size:1.55rem; margin:0 0 8px; }
+    p { line-height:1.7; }
+    .muted { color:#667085; font-size:.9rem; }
+    .toolbar,.actions { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:18px 0; }
+    button { padding:11px 20px; border:1px solid transparent; border-radius:9px; background:#185ec9; color:white; font:inherit; font-weight:600; cursor:pointer; min-height:46px; }
+    button.secondary { background:#edf2f8; color:#243b5b; border-color:#d8e2ee; }
+    #bind { background:#087d65; }
     button:disabled { opacity:.45; cursor:not-allowed; }
-    #status { font-weight:600; }
-    pre { white-space:pre-wrap; overflow-wrap:anywhere; background:#111827; color:#e5edf9; border-radius:10px; padding:16px; min-height:60px; line-height:1.6; }
-    small { color:#637084; }
+    button:focus-visible,input:focus-visible,summary:focus-visible { outline:3px solid #96bfff; outline-offset:3px; }
+    .fields { display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:14px; margin-top:22px; }
+    label { display:block; font-weight:600; margin-bottom:8px; }
+    input { width:100%; padding:12px; border:1px solid #b6c4d6; border-radius:9px; font:inherit; min-width:0; }
+    input:disabled { background:#f3f5f8; color:#667085; }
+    #scanner { background:#101927; border-radius:12px; overflow:hidden; margin-top:20px; }
+    #video { display:block; width:100%; max-height:400px; object-fit:contain; }
+    #scanner p { color:#e2eaf5; padding:0 16px; text-align:center; }
+    [hidden] { display:none !important; }
+    #status { padding:14px 16px; border-radius:10px; background:#eef3fa; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.6; margin-top:20px; }
+    #status[data-kind="success"] { background:#eaf8f1; color:#086346; }
+    #status[data-kind="error"] { background:#fff0ed; color:#b02b20; }
+    #authStatus { font-size:.9rem; color:#52647a; }
+    details { margin-top:24px; border-top:1px solid #e1e7ef; padding-top:18px; }
+    summary { cursor:pointer; color:#52647a; }
+    li { line-height:1.8; margin:6px 0; }
+    a { color:#185ec9; }
+    code { overflow-wrap:anywhere; }
+    @media(max-width:640px) { body { padding:16px 10px; } main { padding:22px 16px; } .fields { grid-template-columns:1fr; } .actions button { flex:1; } }
   </style>
 </head>
 <body>
 <main>
-  <h1>Google Sheets 更新工具</h1>
-  <p>使用 Google 帳號授權後，搜尋 Sheet1 的 A 欄所有等於 <code>abc</code> 的儲存格，將同一列 B 欄改為數字 <code>123</code>。</p>
-  <div class="panel">
-    <p>點擊下方按鈕，直接使用 Google 帳號登入並授權操作試算表，不需要複製任何 Token。</p>
-    <div><button id="login" disabled>使用 Google 登入並授權</button><button class="secondary" id="logout" disabled>解除授權／清除 Token</button></div>
-    <div id="status" role="status">正在載入 Google 登入元件…</div>
+  <h1>財產查詢與綁定</h1>
+  <p class="muted">掃描 Data Matrix 或輸入資產編號，查詢並更新財產目錄。</p>
+  <div class="toolbar">
+    <button id="login" type="button" disabled>登入 Google</button>
+    <button id="logout" type="button" class="secondary" disabled>登出／解除授權</button>
+    <span id="authStatus" role="status">載入登入元件中…</span>
   </div>
-  <div class="panel">
-    <p>試算表：<a href="https://docs.google.com/spreadsheets/d/1rvqYvx1F8Pm7bAPRWF3hc3W9zqPtJpxPKtlYiRb57vE/edit" target="_blank" rel="noopener noreferrer">開啟 Google Sheets</a></p>
-    <button id="execute" disabled>搜尋 abc 並寫入 123</button>
-    <pre id="log" aria-live="polite">尚未執行。</pre>
+
+  <section id="scanner" aria-label="Data Matrix 掃描框" hidden>
+    <video id="video" playsinline muted autoplay></video>
+    <p>請將 Data Matrix 對準鏡頭；辨識後會自動關閉相機並查詢。</p>
+  </section>
+  <div class="toolbar"><button id="scan" type="button" class="secondary" disabled>掃描 Data Matrix</button></div>
+
+  <div class="fields">
+    <div><label for="matrix">Data Matrix 資料</label><input id="matrix" type="text" placeholder="掃描或手動輸入" autocomplete="off" spellcheck="false"></div>
+    <div><label for="asset">資產編號</label><input id="asset" type="text" placeholder="輸入資產編號" autocomplete="off" spellcheck="false"></div>
+    <div><label for="owner">使用人</label><input id="owner" type="text" placeholder="輸入使用人" autocomplete="off"></div>
   </div>
+  <div class="actions">
+    <button id="query" type="button" disabled>查詢</button>
+    <button id="bind" type="button" disabled>綁定</button>
+  </div>
+  <div id="status" role="status" aria-live="polite">請先登入 Google 並授權試算表存取。</div>
+  <p class="muted">資料表：<a id="sheetLink" target="_blank" rel="noopener noreferrer">財產目錄清單</a>　｜　T：Data Matrix　F：資產編號　L：使用人</p>
+  <details>
+    <summary>操作與部署說明</summary>
+    <ul>
+      <li>查詢優先使用 Data Matrix；空白時才使用資產編號，找到後填入資產編號與使用人。</li>
+      <li>綁定優先使用資產編號定位列，僅寫入有內容的 Data Matrix 與使用人；資產編號空白時，使用 Data Matrix 定位列並更新使用人。</li>
+      <li>有填入的值會覆寫原值；空白欄位不會清除既有值，也不會新增資料列。輸入框會忽略前後空白，Data Matrix 則保留原始內容以供精確比對。</li>
+      <li>若 Data Matrix 已屬於其他列，或查詢鍵重複，會停止並顯示錯誤。</li>
+      <li>部署前請修改原始碼的 <code>CLIENT_ID</code>，填入有效的 Google OAuth「網頁應用程式」Client ID；原附件的值已遮蔽，無法直接登入。不需要 Client Secret。</li>
+      <li>在同一 Google Cloud 專案啟用 Google Sheets API，設定 OAuth 同意畫面與測試使用者（若專案仍在測試模式），並將網站來源加入「已授權的 JavaScript 來源」。登入帳號須具有該試算表編輯權限。</li>
+      <li>請透過 HTTPS 網站開啟；本機測試可用 <code>http://localhost:8000</code>，並將該來源加入 OAuth 設定。不要直接以 <code>file://</code> 開啟。手機掃描請使用 HTTPS 並允許相機。</li>
+      <li>Access Token 僅存於本頁記憶體，重新整理或到期後需再次登入。每次查詢或綁定均重新讀取資料；多人同時編輯時仍應避免同時修改同一列。</li>
+    </ul>
+  </details>
 </main>
 <script>
-  'use strict';
-  // 開發者只需要在部署前設定一次，使用者不需要輸入任何 ID 或 Token。
-  const CLIENT_ID = '1053693923718-gl45iakpjnrrgo3b63mh78c2tijq6mh6.apps.googleusercontent.com';
-  const SPREADSHEET_ID = '1rvqYvx1F8Pm7bAPRWF3hc3W9zqPtJpxPKtlYiRb57vE';
-  const SHEET_NAME = 'Sheet1';
-  const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
-  const API_BASE = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`;
-  const $ = id => document.getElementById(id);
-  let accessToken = null;
-  let tokenClient = null;
-  let busy = false;
+'use strict';
+// ===== 部署設定：請將附件已遮蔽的 CLIENT_ID 改成有效值 =====
+const CLIENT_ID = '1053--------ijq6mh6.apps.googleusercontent.com';
+const SPREADSHEET_ID = '1Eb0sXFkim7Xg2ONJVWolWkmto3MvLXEyDKt4UP9P-e8';
+const SHEET_NAME = '財產目錄清單';
+// 從第 1 列讀取，以保留真實列號且不假設表頭位置。
+const SCOPE = 'https://www.googleapis.com/auth/spreadsheets';
+const API_BASE = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}`;
+const SHEET_A1 = `'${SHEET_NAME.replaceAll("'", "''")}'`;
+const $ = id => document.getElementById(id);
+let accessToken = null;
+let expiresAt = 0;
+let expiryTimer = null;
+let busy = false;
+let authPending = false;
+let scanning = false;
+let scannerStarting = false;
+let codeReader = null;
+let gisWaits = 0;
 
-  function appendLog(message) { $('log').textContent += `${message}\n`; }
-  function setButtons() {
-    $('login').disabled = busy || !window.google?.accounts?.oauth2;
-    $('logout').disabled = busy || !accessToken;
-    $('execute').disabled = busy || !accessToken;
-    $('status').textContent = accessToken ? '已取得 Google Access Token（只存於本頁記憶體）' : '尚未授權';
+$('sheetLink').href = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/edit`;
+function status(message, kind = 'info') {
+  $('status').textContent = message;
+  $('status').dataset.kind = kind;
+}
+function authorized() { return Boolean(accessToken) && Date.now() < expiresAt; }
+function updateControls() {
+  const locked = busy || authPending || scanning || scannerStarting;
+  $('login').disabled = locked || !window.google?.accounts?.oauth2;
+  $('login').textContent = authorized() ? '重新登入 Google' : '登入 Google';
+  $('logout').disabled = locked || !accessToken;
+  $('query').disabled = locked || !authorized();
+  $('bind').disabled = locked || !authorized();
+  $('scan').disabled = busy || authPending || (!scanning && (scannerStarting || !authorized()));
+  $('scan').textContent = scanning ? '停止掃描' : '掃描 Data Matrix';
+  for (const id of ['matrix', 'asset', 'owner']) $(id).disabled = locked;
+  $('authStatus').textContent = authPending ? '等待 Google 授權…' : authorized() ? '已登入並取得授權' : '尚未登入／授權已到期';
+}
+function clearAuth() {
+  accessToken = null;
+  expiresAt = 0;
+  clearTimeout(expiryTimer);
+  stopScanner();
+  updateControls();
+}
+function waitForGIS() {
+  updateControls();
+  if (window.google?.accounts?.oauth2) return;
+  if (++gisWaits >= 150) {
+    status('Google 登入元件未能載入，請確認網路或內容封鎖設定後重新整理。', 'error');
+    return;
   }
-  function escapeA1Name(name) { return `'${name.replaceAll("'", "''")}'`; }
+  setTimeout(waitForGIS, 100);
+}
+waitForGIS();
 
-  function waitForGIS() {
-    if (!window.google?.accounts?.oauth2) {
-      setTimeout(waitForGIS, 100);
-      return;
-    }
-    setButtons();
+$('login').addEventListener('click', () => {
+  if (!/^\d+-[a-zA-Z0-9-]+\.apps\.googleusercontent\.com$/.test(CLIENT_ID) || CLIENT_ID.includes('--------')) {
+    status('尚未設定有效的 OAuth Client ID：請將原始碼中的 CLIENT_ID 改成完整值，附件中的值已遮蔽。', 'error');
+    return;
   }
-  waitForGIS();
-
-  $('login').addEventListener('click', () => {
-    if (!/^\d+-.+\.apps\.googleusercontent\.com$/.test(CLIENT_ID)) {
-      alert('網站尚未設定 OAuth Web Client ID，請由開發者修改 HTML 的 CLIENT_ID 常數。');
-      return;
-    }
-    tokenClient = google.accounts.oauth2.initTokenClient({
+  if (location.protocol === 'file:') {
+    status('請透過 HTTPS 或 http://localhost 開啟本頁，並在 OAuth 設定加入該網站來源。', 'error');
+    return;
+  }
+  authPending = true;
+  updateControls();
+  try {
+    const client = google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: SCOPE,
       callback: response => {
+        authPending = false;
         if (response.error || !response.access_token) {
-          $('log').textContent = `授權失敗：${response.error || '未取得 Access Token'}`;
-          return;
+          status(`授權失敗：${response.error_description || response.error || '未取得 Access Token'}`, 'error');
+        } else if (!google.accounts.oauth2.hasGrantedAllScopes(response, SCOPE)) {
+          clearAuth();
+          status('未授予試算表存取權限，請重新登入並允許此權限。', 'error');
+        } else {
+          accessToken = response.access_token;
+          const lifetime = Number(response.expires_in) || 3600;
+          expiresAt = Date.now() + lifetime * 1000;
+          clearTimeout(expiryTimer);
+          expiryTimer = setTimeout(() => {
+            clearAuth();
+            status('Google 授權已到期，請重新登入。', 'error');
+          }, lifetime * 1000);
+          status('登入成功，可以查詢、掃描或綁定。', 'success');
         }
-        accessToken = response.access_token;
-        $('log').textContent = '授權成功，現在可以執行更新。\n';
-        setButtons();
+        updateControls();
       },
-      error_callback: err => {
-        $('log').textContent = `授權視窗錯誤：${err.type || '未知錯誤'}`;
+      error_callback: error => {
+        authPending = false;
+        status(`登入視窗未完成：${error.type || '未知錯誤'}。請再按一次登入。`, 'error');
+        updateControls();
       }
     });
-    tokenClient.requestAccessToken({ prompt: 'select_account' });
-  });
-
-  $('logout').addEventListener('click', () => {
-    if (accessToken) google.accounts.oauth2.revoke(accessToken, () => {});
-    accessToken = null;
-    tokenClient = null;
-    $('log').textContent = '已清除本頁 Token，並要求 Google 撤銷該 Token。\n';
-    setButtons();
-  });
-
-  async function googleApi(url, options = {}) {
-    const resp = await fetch(url, {
-      ...options,
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        ...(options.body ? { 'Content-Type': 'application/json' } : {}),
-        ...options.headers
-      }
-    });
-    const raw = await resp.text();
-    let data;
-    try { data = raw ? JSON.parse(raw) : {}; }
-    catch { throw new Error(`API 回傳非 JSON (${resp.status})：${raw.slice(0, 200)}`); }
-    if (!resp.ok) {
-      if (resp.status === 401) {
-        accessToken = null;
-        setButtons();
-      }
-      throw new Error(`HTTP ${resp.status}：${data.error?.message || raw.slice(0, 200)}`);
-    }
-    return data;
+    client.requestAccessToken({ prompt: 'select_account' });
+  } catch (error) {
+    authPending = false;
+    status(`無法啟動登入：${error.message}`, 'error');
+    updateControls();
   }
-
-  $('execute').addEventListener('click', async () => {
-    if (!accessToken || busy) return;
-    busy = true;
-    setButtons();
-    $('log').textContent = '讀取 A 欄中…\n';
+});
+$('logout').addEventListener('click', () => {
+  const token = accessToken;
+  clearAuth();
+  status('已清除本頁登入狀態。');
+  if (token) {
     try {
-      const sheet = escapeA1Name(SHEET_NAME);
-      const range = encodeURIComponent(`${sheet}!A:A`);
-      const result = await googleApi(`${API_BASE}/values/${range}`);
-      const updates = [];
-      for (const [index, row] of (result.values || []).entries()) {
-        if (row[0] === 'abc') {
-          const rowNumber = index + 1;
-          appendLog(`找到 A${rowNumber} → 將 B${rowNumber} 寫入 123`);
-          updates.push({ range: `${sheet}!B${rowNumber}`, values: [[123]] });
-        }
-      }
-      if (updates.length === 0) {
-        appendLog('沒有找到完全等於 abc 的資料，沒有修改。');
-        return;
-      }
-      const response = await googleApi(`${API_BASE}/values:batchUpdate`, {
-        method: 'POST',
-        body: JSON.stringify({ valueInputOption: 'RAW', data: updates })
+      google.accounts.oauth2.revoke(token, response => {
+        if (response?.error) status('本頁已登出，但 Google 撤銷授權未完成；可至 Google 帳戶管理應用程式授權。', 'error');
       });
-      appendLog(`完成：更新了 ${response.totalUpdatedCells ?? updates.length} 個儲存格。`);
-    } catch (e) {
-      appendLog(`錯誤：${e.message}`);
-    } finally {
-      busy = false;
-      setButtons();
+    } catch { status('本頁已登出，但 Google 撤銷授權未完成。', 'error'); }
+  }
+});
+
+async function googleApi(url, options = {}) {
+  if (!authorized()) {
+    clearAuth();
+    throw new Error('請先登入 Google，或重新取得已到期的授權。');
+  }
+  const writing = options.method === 'POST';
+  let response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      signal: AbortSignal.timeout(30000),
+      headers: { Authorization: `Bearer ${accessToken}`, ...(options.body ? { 'Content-Type': 'application/json' } : {}) }
+    });
+  } catch (error) {
+    throw new Error(writing ? '寫入回應中斷或逾時，結果尚未確認。請先查詢試算表確認，再決定是否重新綁定。' : `無法讀取試算表，請確認網路後重試（${error.message}）。`);
+  }
+  const raw = await response.text();
+  let data;
+  try { data = raw ? JSON.parse(raw) : {}; }
+  catch { throw new Error(`Google API 回應格式錯誤（HTTP ${response.status}）${writing ? '，請先查詢確認寫入結果' : ''}。`); }
+  if (!response.ok) {
+    if (response.status === 401) {
+      clearAuth();
+      throw new Error('登入授權失效，請重新登入。');
     }
+    if (response.status === 403) throw new Error(`無法存取：請確認帳號的試算表權限、Google Sheets API 與 OAuth 設定。${data.error?.message || ''}`);
+    throw new Error(`Google API 錯誤（HTTP ${response.status}）：${data.error?.message || '請稍後再試'}`);
+  }
+  return data;
+}
+function inputs() {
+  // Data Matrix 是識別資料，保留原始字元（含 GS 等控制字元），不做 trim。
+  return { matrix: $('matrix').value, asset: $('asset').value.trim(), owner: $('owner').value.trim() };
+}
+async function readRows() {
+  const query = new URLSearchParams({ valueRenderOption: 'FORMATTED_VALUE', majorDimension: 'ROWS' });
+  for (const col of ['F', 'L', 'T']) query.append('ranges', `${SHEET_A1}!${col}:${col}`);
+  const result = await googleApi(`${API_BASE}/values:batchGet?${query}`);
+  if (!Array.isArray(result.valueRanges) || result.valueRanges.length !== 3) throw new Error('試算表回傳欄位不完整，已停止操作。');
+  const columns = result.valueRanges.map(range => range.values || []);
+  const count = Math.max(...columns.map(column => column.length));
+  return Array.from({ length: count }, (_, index) => ({
+    row: index + 1,
+    asset: String(columns[0][index]?.[0] ?? '').trim(),
+    owner: String(columns[1][index]?.[0] ?? ''),
+    matrix: String(columns[2][index]?.[0] ?? '')
+  }));
+}
+function findUnique(rows, key, value) {
+  const label = key === 'matrix' ? 'Data Matrix 資料' : '資產編號';
+  const matches = rows.filter(row => row[key] === value);
+  if (!matches.length) throw new Error(`找不到此${label}對應的資料列；未修改試算表。`);
+  if (matches.length > 1) throw new Error(`${label}重複，出現在第 ${matches.map(row => row.row).join('、')} 列。請先修正試算表；未修改任何資料。`);
+  return matches[0];
+}
+async function runAction(action) {
+  if (busy || scanning || scannerStarting || authPending) return;
+  if (!authorized()) { clearAuth(); status('請先登入 Google。', 'error'); return; }
+  busy = true;
+  updateControls();
+  try { await action(); }
+  catch (error) { status(error.message, 'error'); }
+  finally { busy = false; updateControls(); }
+}
+async function queryRecord() {
+  const value = inputs();
+  if (!value.matrix && !value.asset) throw new Error('請輸入 Data Matrix 資料或資產編號。');
+  status('正在查詢財產目錄…');
+  const rows = await readRows();
+  // 查詢：Data Matrix 優先，即使資產編號也有值，仍依 Data Matrix 查詢。
+  const row = value.matrix ? findUnique(rows, 'matrix', value.matrix) : findUnique(rows, 'asset', value.asset);
+  $('asset').value = row.asset;
+  $('owner').value = row.owner;
+  status(`查詢成功：第 ${row.row} 列，已填入資產編號與使用人。`, 'success');
+}
+async function bindRecord() {
+  const value = inputs();
+  // 綁定：資產編號優先；不新增列、不寫入 F 欄、不以空白覆蓋資料。
+  if (value.asset) {
+    if (!value.matrix && !value.owner) throw new Error('依資產編號綁定時，請至少填入 Data Matrix 資料或使用人。');
+  } else if (!value.matrix || !value.owner) {
+    throw new Error('未填資產編號時，必須同時填入 Data Matrix 資料與使用人。');
+  }
+  status('正在讀取並檢查綁定資料…');
+  const rows = await readRows();
+  const row = value.asset ? findUnique(rows, 'asset', value.asset) : findUnique(rows, 'matrix', value.matrix);
+  const updates = [];
+  if (value.asset && value.matrix) {
+    const conflicts = rows.filter(other => other.matrix === value.matrix && other.row !== row.row);
+    if (conflicts.length) throw new Error(`此 Data Matrix 已存在於第 ${conflicts.map(other => other.row).join('、')} 列，不能重複綁定；未修改任何資料。`);
+    updates.push({ range: `${SHEET_A1}!T${row.row}`, values: [[value.matrix]] });
+  }
+  if (value.owner) updates.push({ range: `${SHEET_A1}!L${row.row}`, values: [[value.owner]] });
+  status(`正在更新第 ${row.row} 列…`);
+  // RAW 使代碼、前導零及 = 開頭文字保持為字串，避免被當作公式。
+  await googleApi(`${API_BASE}/values:batchUpdate`, {
+    method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: updates })
   });
+  status(`綁定成功：第 ${row.row} 列，已更新${updates.map(update => update.range.includes('!T') ? ' Data Matrix 資料' : ' 使用人').join('、')}。`, 'success');
+}
+$('query').addEventListener('click', () => runAction(queryRecord));
+$('bind').addEventListener('click', () => runAction(bindRecord));
+for (const id of ['matrix', 'asset', 'owner']) {
+  $(id).addEventListener('input', () => status('輸入內容已變更，請查詢或綁定。'));
+  $(id).addEventListener('keydown', event => {
+    if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); runAction(queryRecord); }
+  });
+}
+
+function stopScanner() {
+  scanning = false;
+  if (codeReader) { codeReader.reset(); codeReader = null; }
+  const stream = $('video').srcObject;
+  if (stream?.getTracks) stream.getTracks().forEach(track => track.stop());
+  $('video').srcObject = null;
+  $('scanner').hidden = true;
+  updateControls();
+}
+async function startScanner() {
+  if (!authorized()) { clearAuth(); status('請先登入 Google。', 'error'); return; }
+  if (!window.ZXing?.BrowserMultiFormatReader) { status('掃描元件尚未載入，請確認網路後重試。', 'error'); return; }
+  if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+    status('此環境無法使用相機。請使用 HTTPS 或 localhost，並以支援相機的瀏覽器開啟。', 'error'); return;
+  }
+  const hints = new Map();
+  hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+  hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.DATA_MATRIX]);
+  const reader = new ZXing.BrowserMultiFormatReader(hints);
+  codeReader = reader;
+  scanning = true;
+  scannerStarting = true;
+  $('scanner').hidden = false;
+  status('正在啟動相機，請允許相機權限…');
+  updateControls();
+  try {
+    await reader.decodeFromConstraints({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }, 'video', (result, error) => {
+      if (!scanning || codeReader !== reader) return;
+      if (result) {
+        const text = result.getText();
+        // 先關閉相機，清除上一筆的顯示，然後走與查詢按鈕相同的程式。
+        scannerStarting = false;
+        stopScanner();
+        $('matrix').value = text;
+        $('asset').value = '';
+        $('owner').value = '';
+        runAction(queryRecord);
+      } else if (error && !(error instanceof ZXing.NotFoundException) && !(error instanceof ZXing.ChecksumException) && !(error instanceof ZXing.FormatException)) {
+        stopScanner();
+        status(`掃描錯誤：${error.message || error}`, 'error');
+      }
+    });
+    if (codeReader !== reader || !scanning) reader.reset();
+    else status('掃描中，請將 Data Matrix 對準鏡頭。');
+  } catch (error) {
+    if (codeReader === reader) {
+      stopScanner();
+      const message = error.name === 'NotAllowedError' ? '相機權限遭拒，請在瀏覽器允許此網站使用相機。' : error.name === 'NotFoundError' ? '找不到可用的相機。' : `無法啟動相機：${error.message}`;
+      status(message, 'error');
+    } else reader.reset();
+  } finally {
+    scannerStarting = false;
+    updateControls();
+  }
+}
+$('scan').addEventListener('click', () => {
+  if (scanning) { stopScanner(); status('已停止掃描。'); }
+  else if (!busy && !scannerStarting && !authPending) startScanner();
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && scanning) { stopScanner(); status('頁面已離開前景，掃描已停止。'); }
+});
+window.addEventListener('pagehide', stopScanner);
 </script>
 </body>
 </html>
