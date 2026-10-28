@@ -45,21 +45,21 @@
 <body>
 <main>
   <h1>財產查詢與綁定</h1>
-  <p class="muted">掃描 Data Matrix 或輸入資產編號，查詢並更新財產目錄。</p>
+  <p class="muted">掃描 2D Code 或輸入資產編號，查詢並更新財產目錄。</p>
   <div class="toolbar">
     <button id="login" type="button" disabled>登入 Google</button>
     <button id="logout" type="button" class="secondary" disabled>登出／解除授權</button>
     <span id="authStatus" role="status">載入登入元件中…</span>
   </div>
 
-  <section id="scanner" aria-label="Data Matrix 掃描框" hidden>
+  <section id="scanner" aria-label="2D Code 掃描框" hidden>
     <video id="video" playsinline muted autoplay></video>
-    <p>請將 Data Matrix 對準鏡頭；辨識後會自動關閉相機並查詢。</p>
+    <p>請將 2D Code 對準鏡頭；辨識後會自動關閉相機並查詢。</p>
   </section>
-  <div class="toolbar"><button id="scan" type="button" class="secondary" disabled>掃描 Data Matrix</button></div>
+  <div class="toolbar"><button id="scan" type="button" class="secondary" disabled>掃描 2D Code</button></div>
 
   <div class="fields">
-    <div><label for="matrix">Data Matrix 資料</label><input id="matrix" type="text" placeholder="掃描或手動輸入" autocomplete="off" spellcheck="false"></div>
+    <div><label for="matrix">2D Code 資料</label><input id="matrix" type="text" placeholder="掃描或手動輸入" autocomplete="off" spellcheck="false"></div>
     <div><label for="asset">資產編號</label><input id="asset" type="text" placeholder="輸入資產編號" autocomplete="off" spellcheck="false"></div>
     <div><label for="owner">使用人</label><input id="owner" type="text" placeholder="輸入使用人" autocomplete="off"></div>
     <div><label for="location">位置</label><input id="location" type="text" placeholder="輸入位置" autocomplete="off"></div>
@@ -70,14 +70,14 @@
     <button id="bind" type="button" disabled>綁定</button>
   </div>
   <div id="status" role="status" aria-live="polite">請先登入 Google 並授權試算表存取。</div>
-  <p class="muted">資料表：<a id="sheetLink" target="_blank" rel="noopener noreferrer">財產目錄清單</a>　｜　T：Data Matrix　F：資產編號　L：使用人　M：位置　S：備註</p>
+  <p class="muted">資料表：<a id="sheetLink" target="_blank" rel="noopener noreferrer">財產目錄清單</a>　｜　T：2D Code　F：資產編號　L：使用人　M：位置　S：備註</p>
   <details>
     <summary>操作與部署說明</summary>
     <ul>
-      <li>查詢優先使用 Data Matrix；空白時才使用資產編號，找到後填入資產編號、使用人、位置與備註。掃描成功後會自動進行相同查詢。</li>
-      <li>綁定優先使用資產編號定位列，且 Data Matrix 或使用人至少需填一項；資產編號空白時，必須填入 Data Matrix，並在使用人、位置、備註中至少填一項。找到列時僅更新非空欄位；找不到列時新增一列。</li>
-      <li>有填入的值會覆寫原值；空白欄位不會清除既有值。新增列會填入所有有內容的欄位；原有列不修改資產編號。輸入框會忽略前後空白，Data Matrix 則保留原始內容以供精確比對。</li>
-      <li>若 Data Matrix 已屬於其他列，或查詢鍵重複，會停止並顯示錯誤。</li>
+      <li>查詢優先使用 2D Code；空白時才使用資產編號，找到後填入資產編號、使用人、位置與備註。掃描成功後會自動進行相同查詢。</li>
+      <li>綁定優先使用資產編號定位列，且 2D Code 或使用人至少需填一項；資產編號空白時，必須填入 2D Code，並在使用人、位置、備註中至少填一項。找到列時僅更新非空欄位；找不到列時新增一列。</li>
+      <li>有填入的值會覆寫原值；空白欄位不會清除既有值。新增列會填入所有有內容的欄位；原有列不修改資產編號。輸入框會忽略前後空白，2D Code 則保留原始內容以供精確比對。</li>
+      <li>若 2D Code 已屬於其他列，或查詢鍵重複，會停止並顯示錯誤。</li>
       <li>部署前請修改原始碼的 <code>CLIENT_ID</code>，填入有效的 Google OAuth「網頁應用程式」Client ID；原附件的值已遮蔽，無法直接登入。不需要 Client Secret。</li>
       <li>在同一 Google Cloud 專案啟用 Google Sheets API，設定 OAuth 同意畫面與測試使用者（若專案仍在測試模式），並將網站來源加入「已授權的 JavaScript 來源」。登入帳號須具有該試算表編輯權限。</li>
       <li>請透過 HTTPS 網站開啟；本機測試可用 <code>http://localhost:8000</code>，並將該來源加入 OAuth 設定。不要直接以 <code>file://</code> 開啟。手機掃描請使用 HTTPS 並允許相機。</li>
@@ -120,7 +120,7 @@ function updateControls() {
   $('query').disabled = locked || !authorized();
   $('bind').disabled = locked || !authorized();
   $('scan').disabled = busy || authPending || (!scanning && (scannerStarting || !authorized()));
-  $('scan').textContent = scanning ? '停止掃描' : '掃描 Data Matrix';
+  $('scan').textContent = scanning ? '停止掃描' : '掃描 2D Code';
   for (const id of ['matrix', 'asset', 'owner', 'location', 'notes']) $(id).disabled = locked;
   $('authStatus').textContent = authPending ? '等待 Google 授權…' : authorized() ? '已登入並取得授權' : '尚未登入／授權已到期';
 }
@@ -234,7 +234,7 @@ async function googleApi(url, options = {}) {
   return data;
 }
 function inputs() {
-  // Data Matrix 是識別資料，保留原始字元（含 GS 等控制字元），不做 trim。
+  // 2D Code 是識別資料，保留原始字元（含 GS 等控制字元），不做 trim。
   return { matrix: $('matrix').value, asset: $('asset').value.trim(), owner: $('owner').value.trim(), location: $('location').value.trim(), notes: $('notes').value.trim() };
 }
 async function readRows() {
@@ -254,7 +254,7 @@ async function readRows() {
   }));
 }
 function findUnique(rows, key, value, allowMissing = false) {
-  const label = key === 'matrix' ? 'Data Matrix 資料' : '資產編號';
+  const label = key === 'matrix' ? '2D Code 資料' : '資產編號';
   const matches = rows.filter(row => row[key] === value);
   if (!matches.length && allowMissing) return null;
   if (!matches.length) throw new Error(`找不到此${label}對應的資料列；未修改試算表。`);
@@ -272,10 +272,10 @@ async function runAction(action) {
 }
 async function queryRecord() {
   const value = inputs();
-  if (!value.matrix && !value.asset) throw new Error('請輸入 Data Matrix 資料或資產編號。');
+  if (!value.matrix && !value.asset) throw new Error('請輸入 2D Code 資料或資產編號。');
   status('正在查詢財產目錄…');
   const rows = await readRows();
-  // 查詢：Data Matrix 優先，即使資產編號也有值，仍依 Data Matrix 查詢。
+  // 查詢：2D Code 優先，即使資產編號也有值，仍依 2D Code 查詢。
   const row = value.matrix ? findUnique(rows, 'matrix', value.matrix) : findUnique(rows, 'asset', value.asset);
   $('asset').value = row.asset;
   $('owner').value = row.owner;
@@ -308,16 +308,16 @@ async function bindRecord() {
   const value = inputs();
   // 綁定條件遵循指定順序：資產編號優先。
   if (value.asset) {
-    if (!value.matrix && !value.owner) throw new Error('依資產編號綁定時，請至少填入 Data Matrix 資料或使用人。');
+    if (!value.matrix && !value.owner) throw new Error('依資產編號綁定時，請至少填入 2D Code 資料或使用人。');
   } else if (!value.matrix || !(value.owner || value.location || value.notes)) {
-    throw new Error('未填資產編號時，必須填入 Data Matrix 資料，並在使用人、位置、備註中至少填一項。');
+    throw new Error('未填資產編號時，必須填入 2D Code 資料，並在使用人、位置、備註中至少填一項。');
   }
   status('正在讀取並檢查綁定資料…');
   const rows = await readRows();
   const row = value.asset ? findUnique(rows, 'asset', value.asset, true) : findUnique(rows, 'matrix', value.matrix, true);
   if (value.asset && value.matrix) {
     const conflicts = rows.filter(other => other.matrix === value.matrix && other.row !== row?.row);
-    if (conflicts.length) throw new Error(`此 Data Matrix 已存在於第 ${conflicts.map(other => other.row).join('、')} 列，不能重複綁定；未修改任何資料。`);
+    if (conflicts.length) throw new Error(`此 2D Code 已存在於第 ${conflicts.map(other => other.row).join('、')} 列，不能重複綁定；未修改任何資料。`);
   }
   if (!row) {
     await appendRecord(value);
@@ -326,7 +326,7 @@ async function bindRecord() {
   const updates = [];
   const labels = [];
   for (const [key, col, label] of [
-    ['matrix', 'T', 'Data Matrix 資料'], ['owner', 'L', '使用人'],
+    ['matrix', 'T', '2D Code 資料'], ['owner', 'L', '使用人'],
     ['location', 'M', '位置'], ['notes', 'S', '備註']
   ]) {
     if (key === 'matrix' && !value.asset) continue;
@@ -396,7 +396,7 @@ async function startScanner() {
       }
     });
     if (codeReader !== reader || !scanning) reader.reset();
-    else status('掃描中，請將 Data Matrix 對準鏡頭。');
+    else status('掃描中，請將 2D Code 對準鏡頭。');
   } catch (error) {
     if (codeReader === reader) {
       stopScanner();
