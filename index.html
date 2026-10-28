@@ -19,11 +19,13 @@
     button.secondary { background:#edf2f8; color:#243b5b; border-color:#d8e2ee; }
     #bind { background:#087d65; }
     button:disabled { opacity:.45; cursor:not-allowed; }
-    button:focus-visible,input:focus-visible,summary:focus-visible { outline:3px solid #96bfff; outline-offset:3px; }
-    .fields { display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:14px; margin-top:22px; }
+    button:focus-visible,input:focus-visible,textarea:focus-visible,summary:focus-visible { outline:3px solid #96bfff; outline-offset:3px; }
+    .fields { display:grid; grid-template-columns:1.4fr 1fr 1fr 1fr; gap:14px; margin-top:22px; }
     label { display:block; font-weight:600; margin-bottom:8px; }
-    input { width:100%; padding:12px; border:1px solid #b6c4d6; border-radius:9px; font:inherit; min-width:0; }
-    input:disabled { background:#f3f5f8; color:#667085; }
+    input,textarea { width:100%; padding:12px; border:1px solid #b6c4d6; border-radius:9px; font:inherit; min-width:0; }
+    textarea { resize:vertical; min-height:96px; }
+    .notes { margin-top:18px; }
+    input:disabled,textarea:disabled { background:#f3f5f8; color:#667085; }
     #scanner { background:#101927; border-radius:12px; overflow:hidden; margin-top:20px; }
     #video { display:block; width:100%; max-height:400px; object-fit:contain; }
     #scanner p { color:#e2eaf5; padding:0 16px; text-align:center; }
@@ -43,48 +45,50 @@
 <body>
 <main>
   <h1>財產查詢與綁定</h1>
-  <p class="muted">掃描 2D Code 或輸入資產編號，查詢並更新財產目錄。</p>
+  <p class="muted">掃描 Data Matrix 或輸入資產編號，查詢並更新財產目錄。</p>
   <div class="toolbar">
     <button id="login" type="button" disabled>登入 Google</button>
     <button id="logout" type="button" class="secondary" disabled>登出／解除授權</button>
     <span id="authStatus" role="status">載入登入元件中…</span>
   </div>
 
-  <section id="scanner" aria-label="2D Code 掃描框" hidden>
+  <section id="scanner" aria-label="Data Matrix 掃描框" hidden>
     <video id="video" playsinline muted autoplay></video>
-    <p>請將 2D Code 對準鏡頭；辨識後會自動關閉相機並查詢。</p>
+    <p>請將 Data Matrix 對準鏡頭；辨識後會自動關閉相機並查詢。</p>
   </section>
-  <div class="toolbar"><button id="scan" type="button" class="secondary" disabled>掃描 2D Code</button></div>
+  <div class="toolbar"><button id="scan" type="button" class="secondary" disabled>掃描 Data Matrix</button></div>
 
   <div class="fields">
-    <div><label for="matrix">2D Code 資料</label><input id="matrix" type="text" placeholder="掃描或手動輸入" autocomplete="off" spellcheck="false"></div>
+    <div><label for="matrix">Data Matrix 資料</label><input id="matrix" type="text" placeholder="掃描或手動輸入" autocomplete="off" spellcheck="false"></div>
     <div><label for="asset">資產編號</label><input id="asset" type="text" placeholder="輸入資產編號" autocomplete="off" spellcheck="false"></div>
     <div><label for="owner">使用人</label><input id="owner" type="text" placeholder="輸入使用人" autocomplete="off"></div>
+    <div><label for="location">位置</label><input id="location" type="text" placeholder="輸入位置" autocomplete="off"></div>
   </div>
+  <div class="notes"><label for="notes">備註</label><textarea id="notes" placeholder="輸入備註（可換行）"></textarea></div>
   <div class="actions">
     <button id="query" type="button" disabled>查詢</button>
     <button id="bind" type="button" disabled>綁定</button>
   </div>
   <div id="status" role="status" aria-live="polite">請先登入 Google 並授權試算表存取。</div>
-  <p class="muted">資料表：<a id="sheetLink" target="_blank" rel="noopener noreferrer">財產目錄清單</a>　｜　T：2D Code　F：資產編號　L：使用人</p>
+  <p class="muted">資料表：<a id="sheetLink" target="_blank" rel="noopener noreferrer">財產目錄清單</a>　｜　T：Data Matrix　F：資產編號　L：使用人　M：位置　S：備註</p>
   <details>
     <summary>操作與部署說明</summary>
     <ul>
-      <li>查詢優先使用 2D Code；空白時才使用資產編號，找到後填入資產編號與使用人。</li>
-      <li>綁定優先使用資產編號定位列，僅寫入有內容的 2D Code 與使用人；資產編號空白時，使用 2D Code 定位列並更新使用人。</li>
-      <li>有填入的值會覆寫原值；空白欄位不會清除既有值，也不會新增資料列。輸入框會忽略前後空白，2D Code 則保留原始內容以供精確比對。</li>
-      <li>若 2D Code 已屬於其他列，或查詢鍵重複，會停止並顯示錯誤。</li>
+      <li>查詢優先使用 Data Matrix；空白時才使用資產編號，找到後填入資產編號、使用人、位置與備註。掃描成功後會自動進行相同查詢。</li>
+      <li>綁定優先使用資產編號定位列，且 Data Matrix 或使用人至少需填一項；資產編號空白時，必須填入 Data Matrix，並在使用人、位置、備註中至少填一項。找到列時僅更新非空欄位；找不到列時新增一列。</li>
+      <li>有填入的值會覆寫原值；空白欄位不會清除既有值。新增列會填入所有有內容的欄位；原有列不修改資產編號。輸入框會忽略前後空白，Data Matrix 則保留原始內容以供精確比對。</li>
+      <li>若 Data Matrix 已屬於其他列，或查詢鍵重複，會停止並顯示錯誤。</li>
       <li>部署前請修改原始碼的 <code>CLIENT_ID</code>，填入有效的 Google OAuth「網頁應用程式」Client ID；原附件的值已遮蔽，無法直接登入。不需要 Client Secret。</li>
       <li>在同一 Google Cloud 專案啟用 Google Sheets API，設定 OAuth 同意畫面與測試使用者（若專案仍在測試模式），並將網站來源加入「已授權的 JavaScript 來源」。登入帳號須具有該試算表編輯權限。</li>
       <li>請透過 HTTPS 網站開啟；本機測試可用 <code>http://localhost:8000</code>，並將該來源加入 OAuth 設定。不要直接以 <code>file://</code> 開啟。手機掃描請使用 HTTPS 並允許相機。</li>
-      <li>Access Token 僅存於本頁記憶體，重新整理或到期後需再次登入。每次查詢或綁定均重新讀取資料；多人同時編輯時仍應避免同時修改同一列。</li>
+      <li>Access Token 僅存於本頁記憶體，重新整理或到期後需再次登入。每次查詢或綁定均重新讀取資料；多人同時寫入時仍應避免同時綁定相同識別碼或修改同一列。新增列只填入五個指定欄位，不自動複製其他欄的公式與格式。</li>
     </ul>
   </details>
 </main>
 <script>
 'use strict';
 // ===== 部署設定：請將附件已遮蔽的 CLIENT_ID 改成有效值 =====
-const CLIENT_ID = '1053693923718-gl45iakpjnrrgo3b63mh78c2tijq6mh6.apps.googleusercontent.com';
+const CLIENT_ID = '1053--------ijq6mh6.apps.googleusercontent.com';
 const SPREADSHEET_ID = '1Eb0sXFkim7Xg2ONJVWolWkmto3MvLXEyDKt4UP9P-e8';
 const SHEET_NAME = '財產目錄清單';
 // 從第 1 列讀取，以保留真實列號且不假設表頭位置。
@@ -116,8 +120,8 @@ function updateControls() {
   $('query').disabled = locked || !authorized();
   $('bind').disabled = locked || !authorized();
   $('scan').disabled = busy || authPending || (!scanning && (scannerStarting || !authorized()));
-  $('scan').textContent = scanning ? '停止掃描' : '掃描 2D Code';
-  for (const id of ['matrix', 'asset', 'owner']) $(id).disabled = locked;
+  $('scan').textContent = scanning ? '停止掃描' : '掃描 Data Matrix';
+  for (const id of ['matrix', 'asset', 'owner', 'location', 'notes']) $(id).disabled = locked;
   $('authStatus').textContent = authPending ? '等待 Google 授權…' : authorized() ? '已登入並取得授權' : '尚未登入／授權已到期';
 }
 function clearAuth() {
@@ -230,26 +234,29 @@ async function googleApi(url, options = {}) {
   return data;
 }
 function inputs() {
-  // 2D Code 是識別資料，保留原始字元（含 GS 等控制字元），不做 trim。
-  return { matrix: $('matrix').value, asset: $('asset').value.trim(), owner: $('owner').value.trim() };
+  // Data Matrix 是識別資料，保留原始字元（含 GS 等控制字元），不做 trim。
+  return { matrix: $('matrix').value, asset: $('asset').value.trim(), owner: $('owner').value.trim(), location: $('location').value.trim(), notes: $('notes').value.trim() };
 }
 async function readRows() {
   const query = new URLSearchParams({ valueRenderOption: 'FORMATTED_VALUE', majorDimension: 'ROWS' });
-  for (const col of ['F', 'L', 'T']) query.append('ranges', `${SHEET_A1}!${col}:${col}`);
+  for (const col of ['F', 'L', 'T', 'M', 'S']) query.append('ranges', `${SHEET_A1}!${col}:${col}`);
   const result = await googleApi(`${API_BASE}/values:batchGet?${query}`);
-  if (!Array.isArray(result.valueRanges) || result.valueRanges.length !== 3) throw new Error('試算表回傳欄位不完整，已停止操作。');
+  if (!Array.isArray(result.valueRanges) || result.valueRanges.length !== 5) throw new Error('試算表回傳欄位不完整，已停止操作。');
   const columns = result.valueRanges.map(range => range.values || []);
   const count = Math.max(...columns.map(column => column.length));
   return Array.from({ length: count }, (_, index) => ({
     row: index + 1,
     asset: String(columns[0][index]?.[0] ?? '').trim(),
     owner: String(columns[1][index]?.[0] ?? ''),
-    matrix: String(columns[2][index]?.[0] ?? '')
+    matrix: String(columns[2][index]?.[0] ?? ''),
+    location: String(columns[3][index]?.[0] ?? ''),
+    notes: String(columns[4][index]?.[0] ?? '')
   }));
 }
-function findUnique(rows, key, value) {
-  const label = key === 'matrix' ? '2D Code 資料' : '資產編號';
+function findUnique(rows, key, value, allowMissing = false) {
+  const label = key === 'matrix' ? 'Data Matrix 資料' : '資產編號';
   const matches = rows.filter(row => row[key] === value);
+  if (!matches.length && allowMissing) return null;
   if (!matches.length) throw new Error(`找不到此${label}對應的資料列；未修改試算表。`);
   if (matches.length > 1) throw new Error(`${label}重複，出現在第 ${matches.map(row => row.row).join('、')} 列。請先修正試算表；未修改任何資料。`);
   return matches[0];
@@ -265,46 +272,82 @@ async function runAction(action) {
 }
 async function queryRecord() {
   const value = inputs();
-  if (!value.matrix && !value.asset) throw new Error('請輸入 2D Code 資料或資產編號。');
+  if (!value.matrix && !value.asset) throw new Error('請輸入 Data Matrix 資料或資產編號。');
   status('正在查詢財產目錄…');
   const rows = await readRows();
-  // 查詢：2D Code 優先，即使資產編號也有值，仍依 2D Code 查詢。
+  // 查詢：Data Matrix 優先，即使資產編號也有值，仍依 Data Matrix 查詢。
   const row = value.matrix ? findUnique(rows, 'matrix', value.matrix) : findUnique(rows, 'asset', value.asset);
   $('asset').value = row.asset;
   $('owner').value = row.owner;
-  status(`查詢成功：第 ${row.row} 列，已填入資產編號與使用人。`, 'success');
+  $('location').value = row.location;
+  $('notes').value = row.notes;
+  status(`查詢成功：第 ${row.row} 列，已填入資產編號、使用人、位置與備註。`, 'success');
+}
+// 使用 appendCells 在整張工作表最後一筆資料後新增一列，避免依前端列號覆寫，
+// 並用固定 cell 索引對應欄位，不受表格起始欄或空白列影響。
+async function appendRecord(value) {
+  const metadata = await googleApi(`${API_BASE}?fields=sheets.properties(sheetId,title)`);
+  const sheet = metadata.sheets?.find(item => item.properties?.title === SHEET_NAME);
+  if (!sheet) throw new Error('找不到「財產目錄清單」工作表，未新增資料。');
+  const cells = Array.from({ length: 20 }, () => ({}));
+  for (const [key, index] of [['asset', 5], ['owner', 11], ['location', 12], ['notes', 18], ['matrix', 19]]) {
+    if (value[key]) cells[index] = { userEnteredValue: { stringValue: value[key] } };
+  }
+  status('找不到對應資料，正在新增一列…');
+  await googleApi(`${API_BASE}:batchUpdate`, {
+    method: 'POST',
+    body: JSON.stringify({ requests: [{ appendCells: {
+      sheetId: sheet.properties.sheetId,
+      rows: [{ values: cells }],
+      fields: 'userEnteredValue'
+    } }] })
+  });
+  status('綁定成功：已新增一列，並寫入有內容的欄位。', 'success');
 }
 async function bindRecord() {
   const value = inputs();
-  // 綁定：資產編號優先；不新增列、不寫入 F 欄、不以空白覆蓋資料。
+  // 綁定條件遵循指定順序：資產編號優先。
   if (value.asset) {
-    if (!value.matrix && !value.owner) throw new Error('依資產編號綁定時，請至少填入 2D Code 資料或使用人。');
-  } else if (!value.matrix || !value.owner) {
-    throw new Error('未填資產編號時，必須同時填入 2D Code 資料與使用人。');
+    if (!value.matrix && !value.owner) throw new Error('依資產編號綁定時，請至少填入 Data Matrix 資料或使用人。');
+  } else if (!value.matrix || !(value.owner || value.location || value.notes)) {
+    throw new Error('未填資產編號時，必須填入 Data Matrix 資料，並在使用人、位置、備註中至少填一項。');
   }
   status('正在讀取並檢查綁定資料…');
   const rows = await readRows();
-  const row = value.asset ? findUnique(rows, 'asset', value.asset) : findUnique(rows, 'matrix', value.matrix);
-  const updates = [];
+  const row = value.asset ? findUnique(rows, 'asset', value.asset, true) : findUnique(rows, 'matrix', value.matrix, true);
   if (value.asset && value.matrix) {
-    const conflicts = rows.filter(other => other.matrix === value.matrix && other.row !== row.row);
-    if (conflicts.length) throw new Error(`此 2D Code 已存在於第 ${conflicts.map(other => other.row).join('、')} 列，不能重複綁定；未修改任何資料。`);
-    updates.push({ range: `${SHEET_A1}!T${row.row}`, values: [[value.matrix]] });
+    const conflicts = rows.filter(other => other.matrix === value.matrix && other.row !== row?.row);
+    if (conflicts.length) throw new Error(`此 Data Matrix 已存在於第 ${conflicts.map(other => other.row).join('、')} 列，不能重複綁定；未修改任何資料。`);
   }
-  if (value.owner) updates.push({ range: `${SHEET_A1}!L${row.row}`, values: [[value.owner]] });
+  if (!row) {
+    await appendRecord(value);
+    return;
+  }
+  const updates = [];
+  const labels = [];
+  for (const [key, col, label] of [
+    ['matrix', 'T', 'Data Matrix 資料'], ['owner', 'L', '使用人'],
+    ['location', 'M', '位置'], ['notes', 'S', '備註']
+  ]) {
+    if (key === 'matrix' && !value.asset) continue;
+    if (value[key]) {
+      updates.push({ range: `${SHEET_A1}!${col}${row.row}`, values: [[value[key]]] });
+      labels.push(label);
+    }
+  }
   status(`正在更新第 ${row.row} 列…`);
-  // RAW 使代碼、前導零及 = 開頭文字保持為字串，避免被當作公式。
+  // RAW 保留代碼前導零與 = 開頭文字；新增列同樣使用 stringValue。
   await googleApi(`${API_BASE}/values:batchUpdate`, {
     method: 'POST', body: JSON.stringify({ valueInputOption: 'RAW', data: updates })
   });
-  status(`綁定成功：第 ${row.row} 列，已更新${updates.map(update => update.range.includes('!T') ? ' 2D Code 資料' : ' 使用人').join('、')}。`, 'success');
+  status(`綁定成功：第 ${row.row} 列，已更新${labels.join('、')}。`, 'success');
 }
 $('query').addEventListener('click', () => runAction(queryRecord));
 $('bind').addEventListener('click', () => runAction(bindRecord));
-for (const id of ['matrix', 'asset', 'owner']) {
+for (const id of ['matrix', 'asset', 'owner', 'location', 'notes']) {
   $(id).addEventListener('input', () => status('輸入內容已變更，請查詢或綁定。'));
   $(id).addEventListener('keydown', event => {
-    if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); runAction(queryRecord); }
+    if (id !== 'notes' && event.key === 'Enter' && !event.isComposing) { event.preventDefault(); runAction(queryRecord); }
   });
 }
 
@@ -344,6 +387,8 @@ async function startScanner() {
         $('matrix').value = text;
         $('asset').value = '';
         $('owner').value = '';
+        $('location').value = '';
+        $('notes').value = '';
         runAction(queryRecord);
       } else if (error && !(error instanceof ZXing.NotFoundException) && !(error instanceof ZXing.ChecksumException) && !(error instanceof ZXing.FormatException)) {
         stopScanner();
@@ -351,7 +396,7 @@ async function startScanner() {
       }
     });
     if (codeReader !== reader || !scanning) reader.reset();
-    else status('掃描中，請將 2D Code 對準鏡頭。');
+    else status('掃描中，請將 Data Matrix 對準鏡頭。');
   } catch (error) {
     if (codeReader === reader) {
       stopScanner();
